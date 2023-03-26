@@ -205,6 +205,32 @@ void pointAssociateTobeMapped(PointType const *const pi, PointType *const po) {
   po->intensity = pi->intensity;
 }
 
+// Save map
+std::string pathScan = std::string("/home/wfram/Datasets/indoor/kinect2/pcd/");
+pcl::PointCloud<PointType>::Ptr pcl_wait_save(new pcl::PointCloud<PointType>());
+void SaveMap()
+{
+    int size = laserCloudFullRes->points.size();
+    pcl::PointCloud<PointType>::Ptr laserCloudWorld(new pcl::PointCloud<PointType>(size, 1));
+
+    for (int i = 0; i < size; i++)
+    {
+        pointAssociateToMap(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+    }
+    *pcl_wait_save += *laserCloudWorld;
+
+    static int scan_wait_num = 0;
+    scan_wait_num ++;
+    if (pcl_wait_save->size() > 0)
+    {
+        std::string all_points_dir(pathScan + std::string("scan") + std::string(".pcd")); // TODO: Use ROOT_DIR from CMake
+        pcl::PCDWriter pcd_writer;
+        std::cout << "Current scan saved to " << all_points_dir << std::endl;
+        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+//        pcl_wait_save->clear();
+    }
+}
+
 void laserCloudCornerLastHandler(
     const sensor_msgs::PointCloud2ConstPtr &laserCloudCornerLast2) {
   mBuf.lock();
@@ -247,7 +273,7 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry) {
   Eigen::Vector3d t_w_curr = q_wmap_wodom * t_wodom_curr + t_wmap_wodom;
 
   nav_msgs::Odometry odomAftMapped;
-  odomAftMapped.header.frame_id = "/camera_init";
+  odomAftMapped.header.frame_id = "camera_init";
   odomAftMapped.child_frame_id = "/aft_mapped";
   odomAftMapped.header.stamp = laserOdometry->header.stamp;
   odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
@@ -881,7 +907,7 @@ void process() {
         pcl::toROSMsg(*laserCloudSurround, laserCloudSurround3);
         laserCloudSurround3.header.stamp =
             ros::Time().fromSec(timeLaserOdometry);
-        laserCloudSurround3.header.frame_id = "/camera_init";
+        laserCloudSurround3.header.frame_id = "camera_init";
         pubLaserCloudSurround.publish(laserCloudSurround3);
       }
 
@@ -894,7 +920,7 @@ void process() {
         sensor_msgs::PointCloud2 laserCloudMsg;
         pcl::toROSMsg(laserCloudMap, laserCloudMsg);
         laserCloudMsg.header.stamp = ros::Time().fromSec(timeLaserOdometry);
-        laserCloudMsg.header.frame_id = "/camera_init";
+        laserCloudMsg.header.frame_id = "camera_init";
         pubLaserCloudMap.publish(laserCloudMsg);
       }
 
@@ -909,7 +935,7 @@ void process() {
       sensor_msgs::PointCloud2 laserCloudFullRes3;
       pcl::toROSMsg(*laserCloudFullResColor, laserCloudFullRes3);
       laserCloudFullRes3.header.stamp = ros::Time().fromSec(timeLaserOdometry);
-      laserCloudFullRes3.header.frame_id = "/camera_init";
+      laserCloudFullRes3.header.frame_id = "camera_init";
       pubLaserCloudFullRes.publish(laserCloudFullRes3);
 
       printf("mapping pub time %f ms \n", t_pub.toc());
@@ -917,7 +943,7 @@ void process() {
       printf("whole mapping time %f ms +++++\n", t_whole.toc());
 
       nav_msgs::Odometry odomAftMapped;
-      odomAftMapped.header.frame_id = "/camera_init";
+      odomAftMapped.header.frame_id = "camera_init";
       odomAftMapped.child_frame_id = "/aft_mapped";
       odomAftMapped.header.stamp = ros::Time().fromSec(timeLaserOdometry);
       odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
@@ -933,9 +959,11 @@ void process() {
       laserAfterMappedPose.header = odomAftMapped.header;
       laserAfterMappedPose.pose = odomAftMapped.pose.pose;
       laserAfterMappedPath.header.stamp = odomAftMapped.header.stamp;
-      laserAfterMappedPath.header.frame_id = "/camera_init";
+      laserAfterMappedPath.header.frame_id = "camera_init";
       laserAfterMappedPath.poses.push_back(laserAfterMappedPose);
       pubLaserAfterMappedPath.publish(laserAfterMappedPath);
+
+      SaveMap();
 
       static tf::TransformBroadcaster br;
       tf::Transform transform;
@@ -948,7 +976,7 @@ void process() {
       transform.setRotation(q);
       br.sendTransform(tf::StampedTransform(transform,
                                             odomAftMapped.header.stamp,
-                                            "/camera_init", "/aft_mapped"));
+                                            "camera_init", "/aft_mapped"));
 
       frameCount++;
     }
